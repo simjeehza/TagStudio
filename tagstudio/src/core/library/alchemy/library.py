@@ -222,6 +222,8 @@ class Library:
             for child_id in tag.subtag_ids:
                 self.add_parent_tag(parent_id=tag.id, child_id=child_id)
 
+
+        print("\n\n\n\nHERE\n\n\n\n\n")
         # Entries
         self.add_entries(
             [
@@ -231,6 +233,8 @@ class Library:
                     fields=[],
                     id=entry.id + 1,  # JSON IDs start at 0 instead of 1
                     date_added=datetime.now(),
+                    date_modified=datetime.now(),
+                    date_created=datetime.now(),
                 )
                 for entry in json_lib.entries
             ]
@@ -287,7 +291,7 @@ class Library:
             drivername="sqlite",
             database=str(self.storage_path),
         )
-        # NOTE: File-based databases should use NullPool to create new DB connection in order to
+        # NOTE: File-based databases should use NullPool ito create new DB connection in order to
         # keep connections on separate threads, which prevents the DB files from being locked
         # even after a connection has been closed.
         # SingletonThreadPool (the default for :memory:) should still be used for in-memory DBs.
@@ -517,6 +521,15 @@ class Library:
             make_transient(entry)
             return entry
 
+    def get_entry_by_path(self, path: Path) -> Entry | None:
+        """Get the entry with the corresponding path."""
+        with Session(self.engine) as session:
+            entry = session.scalar(select(Entry).where(Entry.path == path))
+            if entry:
+                session.expunge(entry)
+                make_transient(entry)
+            return entry
+
     @property
     def entries_count(self) -> int:
         with Session(self.engine) as session:
@@ -664,6 +677,10 @@ class Library:
             match search.sorting_mode:
                 case SortingModeEnum.DATE_ADDED:
                     sort_on = Entry.id
+                case SortingModeEnum.DATE_CREATED:
+                    sort_on = Entry.date_created
+                case SortingModeEnum.DATE_MODIFIED:
+                    sort_on = Entry.date_modified
 
             statement = statement.order_by(asc(sort_on) if search.ascending else desc(sort_on))
             statement = statement.limit(search.limit).offset(search.offset)
